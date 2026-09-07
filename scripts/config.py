@@ -53,7 +53,7 @@ N_REPLICAS_MAVA  = len(MAVA_TRAJS)
 LABEL_APO = "Apo"
 LABEL_MAVA  = "Mava"
 
-CONTACTS_XLSX = os.path.join(ROOT_DIR, "examples", "Apo_vs_Mava_contacts.xlsx")
+CONTACTS_XLSX = os.path.join(ROOT_DIR, "descriptors", "Apo_vs_Mava_contacts.xlsx")
 
 OUT_DIR     = os.path.join(ROOT_DIR, "output")
 MODELS_DIR  = os.path.join(ROOT_DIR, "models")
