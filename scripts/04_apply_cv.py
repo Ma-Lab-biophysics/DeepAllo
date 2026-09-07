@@ -48,6 +48,8 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import torch
+from collections.abc import Mapping
+from mlcolvar.cvs import DeepLDA
 import MDAnalysis as mda
 import matplotlib
 matplotlib.use("Agg")
@@ -56,11 +58,15 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import ListedColormap
 from scipy.ndimage import uniform_filter1d    # for sliding-window smoothing
 from scipy import stats                       # Wasserstein distance
-from scipy.spatial.distance import jensenshannon  # Jensen-Shannon divergence
+from scipy.spatial.distance import jensenshannon  # Jensen-Shannon distance
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  USER CONFIGURATION  ← edit everything in this block
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# NOTE: unlike steps 01-03, this script is self-contained and does NOT read
+# config.py, so every relative path below is resolved against your current
+# working directory. Run it from the repository root, or use absolute paths.
 
 # ── Topology -----------------------------------------------------------------
 TOPOLOGY = "examples/Trajs/Apo/topology.pdb"
@@ -83,16 +89,17 @@ MODEL_PATH = "models/deeplda_model_full.pt"
 PAIRS_RESIDS_PATH = "output/pairs_resids.npy"
 PAIRS_LABELS_PATH = "output/pairs_labels.npy"
 
-# ── Reference CV distributions (written by step 02) -------------------------
-# State 1 — e.g. Mava
-CV_STATE1_PATH  = "output/cv_values_mava.npy"
-LABEL_STATE1    = "Mava"
+# ── Reference CV distributions ----------------------------------------------
+# Written by step 02 (Workflow A) or step 03 (Workflow B).
+# State 1 / state 2 follow the same order as steps 01-03: state 1 is the
+# first state in config.py (Apo). Colours follow the manuscript convention
+# (red = Apo, blue = Mava, green = OM).
+CV_STATE1_PATH  = "output/cv_values_apo.npy"
+LABEL_STATE1    = "Apo"
+COLOR_STATE1    =  "#d6604d"   # red
 
-COLOR_STATE1    =  "#d6604d"  # red
-
-# State 2 — e.g. Ome
-CV_STATE2_PATH  = "output/cv_values_apo.npy"
-LABEL_STATE2    = "Apo"
+CV_STATE2_PATH  = "output/cv_values_mava.npy"
+LABEL_STATE2    = "Mava"
 COLOR_STATE2    =  "#2166ac"   # blue
 
 # ── Output directory ---------------------------------------------------------
@@ -148,11 +155,44 @@ def find_trajs(directory):
 
 
 def load_model(path):
+    """Load a serialized DeepLDA model or a DeepLDA state dictionary.
+
+    Step 03 accepts either form, so this does too. For a state dictionary the
+    layer widths are inferred from the stored weight shapes, which keeps this
+    script independent of config.py.
+    """
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Model not found:\n  {path}")
-    model = torch.load(path, map_location="cpu", weights_only=False)
+        raise FileNotFoundError(
+            f"Model not found:\n  {path}\n"
+            "Relative paths are resolved against the current working "
+            "directory; run from the repository root or use an absolute path."
+        )
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+
+    if isinstance(payload, torch.nn.Module):
+        model, kind = payload, "serialized model"
+    elif isinstance(payload, Mapping):
+        indices = sorted(
+            int(m.group(1))
+            for m in (re.fullmatch(r"nn\.nn\.(\d+)\.weight", k) for k in payload)
+            if m
+        )
+        if not indices:
+            raise TypeError(f"No feedforward weights found in {path}.")
+        weights = [payload[f"nn.nn.{i}.weight"] for i in indices]
+        layers = [weights[0].shape[1]] + [w.shape[0] for w in weights]
+        n_states = payload["lda.evecs"].shape[1] + 1
+        model = DeepLDA(layers, n_states=n_states,
+                        options={"nn": {"activation": "relu"}})
+        model.load_state_dict(payload, strict=True)
+        kind = f"state dictionary (layers {layers}, n_states {n_states})"
+    else:
+        raise TypeError(
+            f"Unsupported model payload in {path}: {type(payload).__name__}."
+        )
+
     model.eval()
-    print(f"  Model        : {path}")
+    print(f"  Model        : {path}  [{kind}]")
     return model
 
 
@@ -170,7 +210,8 @@ def load_reference_cv(path, label):
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Reference CV not found:\n  {path}\n"
-            "Run 02_train.py first."
+            "Run 02_train.py (Workflow A) or 03_post_training_analysis.py "
+            "(Workflow B) first; both write output/cv_values_<state>.npy."
         )
     cv = np.load(path)
     if cv.ndim == 2:
@@ -448,7 +489,7 @@ def _to_pdf(data, bins=300):
 
 def compute_distribution_metrics(cv_sim, cv_ref1, cv_ref2):
     """
-    Compute Wasserstein distance and Jensen-Shannon divergence between
+    Compute Wasserstein distance and Jensen-Shannon distance between
     the new simulation and each reference state.
 
     Wasserstein (Earth Mover's Distance)
@@ -457,9 +498,10 @@ def compute_distribution_metrics(cv_sim, cv_ref1, cv_ref2):
       another, accounting for BOTH shift in mean AND spread differences.
     • 0 = identical distributions.  Units are the same as CV₁.
 
-    Jensen-Shannon Divergence (JSD)
-    ────────────────────────────────
-    • Symmetric, smoothed version of KL divergence.
+    Jensen-Shannon Distance (JSD)
+    ─────────────────────────────
+    • Square root of the Jensen-Shannon divergence (scipy returns the
+      distance); symmetric, smoothed relative of KL divergence.
     • Bounded [0, 1] (base-2 bits).  0 = identical, 1 = no overlap.
     • Penalises wrong location AND wrong width simultaneously.
 
@@ -504,7 +546,7 @@ def print_and_save_metrics(metrics, save_path):
     print(f"  │ Metric                   │ vs {LABEL_STATE1:<9s} │ vs {LABEL_STATE2:<6s} │")
     print("  ├──────────────────────────┼──────────────┼───────────┤")
     print(f"  │ Wasserstein distance     │ {w1:>12.4f} │ {w2:>9.4f} │")
-    print(f"  │ Jensen-Shannon div (bit) │ {jsd1:>12.4f} │ {jsd2:>9.4f} │")
+    print(f"  │ Jensen-Shannon dist (JSD)│ {jsd1:>12.4f} │ {jsd2:>9.4f} │")
     print("  └──────────────────────────┴──────────────┴───────────┘")
     print("  Interpretation: lower = more similar to that reference state")
     print()
