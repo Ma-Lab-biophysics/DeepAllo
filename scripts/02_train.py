@@ -541,7 +541,9 @@ def plot_loss_convergence(metrics_cb, early_stop, save_path):
 
 def plot_cv_distribution(cv_all, labels_int, save_path):
     fig, ax = plt.subplots(figsize=(12, 7), dpi=120)
-    palette = [(LABEL_APO, "#2166ac"), (LABEL_MAVA, "#d6604d")]
+    # Manuscript convention: red = first state (Apo), blue = second state
+    # (Mava). Kept identical to COLOR_STATE1 / COLOR_STATE2 in 04_apply_cv.py.
+    palette = [(LABEL_APO, "#d6604d"), (LABEL_MAVA, "#2166ac")]
     for idx, (name, color) in enumerate(palette):
         ax.hist(cv_all[labels_int == idx], bins=80, density=True,
                 alpha=0.55, color=color, label=name, edgecolor="none")

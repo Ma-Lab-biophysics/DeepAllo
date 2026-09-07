@@ -746,13 +746,15 @@ def plot_probability_vs_frame(p1_sm, boundaries, save_path):
 
 def plot_state_assignment(cv_all, hard_assign, boundaries, save_path):
     """
-    Colour-coded strip plot: one horizontal strip per replica, each
-    frame coloured by its hard state assignment (blue = state1,
-    red = state2).  Immediately shows which replicas stay in one basin
-    and which ones transition.
+    Colour-coded strip plot: one horizontal strip per replica, each frame
+    coloured by its hard state assignment. Colours come from COLOR_STATE1 /
+    COLOR_STATE2 and are described by the legend, not by the title.
+
+    hard_assign is 1 for state 1 and 0 for state 2, so the colormap must be
+    ordered [state2, state1] for index 0 to receive the state-2 colour.
     """
     n_reps = len(boundaries)
-    cmap   = ListedColormap([COLOR_STATE1, COLOR_STATE2])
+    cmap   = ListedColormap([COLOR_STATE2, COLOR_STATE1])
 
     fig, axes = plt.subplots(
         n_reps, 1,
@@ -776,8 +778,7 @@ def plot_state_assignment(cv_all, hard_assign, boundaries, save_path):
 
     axes[-1, 0].set_xlabel("Frame", fontsize=14, fontweight="bold")
     fig.suptitle(
-        f"{SIM_LABEL} — per-frame state assignment\n"
-        f"(blue = {LABEL_STATE1}, red = {LABEL_STATE2})",
+        f"{SIM_LABEL} — per-frame state assignment",
         fontweight="bold", fontsize=16,
     )
     legend_handles = [
