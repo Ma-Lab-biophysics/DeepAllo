@@ -19,11 +19,11 @@ DeepAllo/
 ├── run_pipeline.sh
 ├── examples/
 │   ├── Apo_vs_Mava_contacts.xlsx
-│   └── Apo_vs_Ome_contacts.xlsx
-├── Trajs/                        # trajectories are archived on Zenodo
-│   ├── Apo/topology.pdb
-│   ├── Mava/topology.pdb
-│   └── Ome/topology.pdb
+│   ├── Apo_vs_Ome_contacts.xlsx
+│   └── Trajs/
+│       ├── Apo/{topology.pdb, replica1.xtc}
+│       ├── Mava/{topology.pdb, replica1.xtc}
+│       └── Ome/{topology.pdb, replica1.xtc}
 └── weights_files/
     ├── Model_Apo_vs_Mava/
     │   ├── deeplda_model.pt
@@ -33,8 +33,8 @@ DeepAllo/
         └── deeplda_model_full.pt
 ```
 
-`scripts/config.py` uses `Trajs/Apo/topology.pdb` as the shared topology and discovers
-the Apo and Mava trajectories under `Trajs/Apo/` and `Trajs/Mava/`. 
+`scripts/config.py` uses `examples/Trajs/Apo/topology.pdb` as the shared
+topology and discovers trajectories under `examples/Trajs/<state>/`. 
 
 Two archived models are supplied. `Model_Apo_vs_Mava` uses the 46 contact
 descriptors in `examples/Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM` uses
@@ -43,6 +43,21 @@ the 69 descriptors in `examples/Apo_vs_Ome_contacts.xlsx`. Set `MAVA_DIR`, `LABE
 
 Data and output paths are resolved relative to the repository root rather
 than to `scripts/`, so run the commands below from the repository root.
+
+## Demo data vs. published results
+
+`examples/Trajs/` ships a **strided single replica per state** (every 20th
+frame; 50 frames, ~2 MB each). It exists so the pipeline can be exercised end
+to end in seconds, and it is **not sufficient to reproduce the published
+results**: sensitivity scores are scaled by the training-set standard
+deviation of each descriptor, so a 50-frame subset reorders the ranking
+(Spearman rank correlation ~0.67 against the published table, 15 of the top 20
+contacts retained).
+
+To reproduce the paper, download the full trajectories from Zenodo (28 Apo,
+27 Mava and 28 OM replicas of 1 us, saved at 1 ns per frame; see the Data
+Availability statement) and replace the contents of `examples/Trajs/<state>/`,
+keeping the tracked `topology.pdb` in place.
 
 ## Install dependencies
 

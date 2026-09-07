@@ -63,7 +63,7 @@ from scipy.spatial.distance import jensenshannon  # Jensen-Shannon divergence
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Topology -----------------------------------------------------------------
-TOPOLOGY = "topology.pdb"
+TOPOLOGY = "examples/Trajs/Apo/topology.pdb"
 
 # ── New trajectories ---------------------------------------------------------
 # Folder that contains the .xtc files to analyse.

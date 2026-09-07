@@ -15,7 +15,10 @@ import os
 # and output paths below are resolved relative to that root, not to scripts/.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-TRAJS_DIR = os.path.join(ROOT_DIR, "Trajs")
+# Trajectories live under examples/Trajs/<state>/. The repository ships a
+# strided single-replica demo set there; replace it with the full replicas
+# from Zenodo to reproduce the published results.
+TRAJS_DIR = os.path.join(ROOT_DIR, "examples", "Trajs")
 
 # The topology files distributed with Apo, Mava, and Ome are identical. Use
 # the Apo copy as the shared topology for descriptor extraction.
@@ -36,7 +39,7 @@ def _find_trajs(directory):
     if not files:
         raise FileNotFoundError(
             f"No .xtc files found in {directory!r}. "
-            "Check APO_DIR / MAVA_DIR in config.py."
+            "Check TRAJS_DIR / APO_DIR / MAVA_DIR in config.py."
         )
     return sorted(files, key=_natural_sort_key)
 

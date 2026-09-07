@@ -3,8 +3,10 @@ output/
 figures/
 models/
 
-# Trajectories are archived on Zenodo, not in git (topology.pdb is tracked)
-Trajs/*/*.xtc
+# Full trajectories are archived on Zenodo, not in git. Only the strided
+# single-replica demo set under examples/Trajs/ is tracked.
+*.xtc
+!examples/Trajs/*/replica1.xtc
 
 # Local verification runs
 run_*/
