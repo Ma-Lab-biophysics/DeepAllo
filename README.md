@@ -17,8 +17,9 @@ DeepAllo/
 │   └── config.py
 ├── environment.yml
 ├── run_pipeline.sh
-├── Apo_vs_Mava_contacts.xlsx
-├── Apo_vs_Ome_contacts.xlsx
+├── examples/
+│   ├── Apo_vs_Mava_contacts.xlsx
+│   └── Apo_vs_Ome_contacts.xlsx
 ├── Trajs/                        # trajectories are archived on Zenodo
 │   ├── Apo/topology.pdb
 │   ├── Mava/topology.pdb
@@ -36,8 +37,8 @@ DeepAllo/
 the Apo and Mava trajectories under `Trajs/Apo/` and `Trajs/Mava/`. 
 
 Two archived models are supplied. `Model_Apo_vs_Mava` uses the 46 contact
-descriptors in `Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM` uses the 69
-descriptors in `Apo_vs_Ome_contacts.xlsx`. Set `MAVA_DIR`, `LABEL_MAVA` and
+descriptors in `examples/Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM` uses
+the 69 descriptors in `examples/Apo_vs_Ome_contacts.xlsx`. Set `MAVA_DIR`, `LABEL_MAVA` and
 `CONTACTS_XLSX` in `scripts/config.py` to select which comparison to run.
 
 Data and output paths are resolved relative to the repository root rather
