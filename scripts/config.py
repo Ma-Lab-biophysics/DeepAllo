@@ -11,7 +11,9 @@ import os
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# config.py lives in scripts/, so the project root is one level up. All data
+# and output paths below are resolved relative to that root, not to scripts/.
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TRAJS_DIR = os.path.join(ROOT_DIR, "Trajs")
 

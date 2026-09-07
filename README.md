@@ -9,11 +9,12 @@ Apo is state 1 and Mava is state 2.
 
 ```text
 DeepAllo/
-├── 01_extract_descriptors.py
-├── 02_train.py
-├── 03_post_training_analysis.py
-├── 04_apply_cv.py
-├── config.py
+├── scripts/
+│   ├── 01_extract_descriptors.py
+│   ├── 02_train.py
+│   ├── 03_post_training_analysis.py
+│   ├── 04_apply_cv.py
+│   └── config.py
 ├── environment.yml
 ├── run_pipeline.sh
 ├── Apo_vs_Mava_contacts.xlsx
@@ -31,13 +32,16 @@ DeepAllo/
         └── deeplda_model_full.pt
 ```
 
-`config.py` uses `Trajs/Apo/topology.pdb` as the shared topology and discovers
+`scripts/config.py` uses `Trajs/Apo/topology.pdb` as the shared topology and discovers
 the Apo and Mava trajectories under `Trajs/Apo/` and `Trajs/Mava/`. 
 
 Two archived models are supplied. `Model_Apo_vs_Mava` uses the 46 contact
 descriptors in `Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM` uses the 69
 descriptors in `Apo_vs_Ome_contacts.xlsx`. Set `MAVA_DIR`, `LABEL_MAVA` and
-`CONTACTS_XLSX` in `config.py` to select which comparison to run.
+`CONTACTS_XLSX` in `scripts/config.py` to select which comparison to run.
+
+Data and output paths are resolved relative to the repository root rather
+than to `scripts/`, so run the commands below from the repository root.
 
 ## Install dependencies
 
@@ -68,13 +72,13 @@ The canonical steps are:
 
 | Step | Script | Purpose |
 |---|---|---|
-| 01 | `01_extract_descriptors.py` | Extract Apo/Mava contact-distance descriptors |
-| 02 | `02_train.py` | Train a new model and write it under `models/` |
-| 03 | `03_post_training_analysis.py` | Analyze the resulting model |
-| 04 | `04_apply_cv.py` | Optional application to another simulation |
+| 01 | `scripts/01_extract_descriptors.py` | Extract Apo/Mava contact-distance descriptors |
+| 02 | `scripts/02_train.py` | Train a new model and write it under `models/` |
+| 03 | `scripts/03_post_training_analysis.py` | Analyze the resulting model |
+| 04 | `scripts/04_apply_cv.py` | Optional application to another simulation |
 
 NVIDIA CUDA GPUs are supported and can be enabled by setting
-`TRAIN_ACCELERATOR = "cuda"` in `config.py`. On Apple Silicon, CPU execution is
+`TRAIN_ACCELERATOR = "cuda"` in `scripts/config.py`. On Apple Silicon, CPU execution is
 recommended because the MPS backend does not support the required
 eigendecomposition; set `TRAIN_ACCELERATOR = "cpu"`.
 
@@ -100,13 +104,13 @@ therefore does not retrain or overwrite a model.
 First generate the descriptors:
 
 ```bash
-python 01_extract_descriptors.py
+python scripts/01_extract_descriptors.py
 ```
 
 Then analyze the supplied state dictionary directly:
 
 ```bash
-python 03_post_training_analysis.py \
+python scripts/03_post_training_analysis.py \
   --model weights_files/Model_Apo_vs_Mava/deeplda_model.pt
 ```
 
@@ -118,4 +122,4 @@ writes CV projections, normalized sensitivities, method metadata,
 and a machine-readable analysis summary to `output/`, with plots under `figures/`. 
 
 For applying the CV to another system, edit the user-settings block at the top
-of `04_apply_cv.py` before running Step 04. 
+of `scripts/04_apply_cv.py` before running Step 04. 

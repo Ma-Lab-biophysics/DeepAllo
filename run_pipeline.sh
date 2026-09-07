@@ -21,10 +21,10 @@ run_step() {
     local step="$1"
     local file
     case "$step" in
-        01) file="${SCRIPT_DIR}/01_extract_descriptors.py" ;;
-        02) file="${SCRIPT_DIR}/02_train.py" ;;
-        03) file="${SCRIPT_DIR}/03_post_training_analysis.py" ;;
-        04) file="${SCRIPT_DIR}/04_apply_cv.py" ;;
+        01) file="${SCRIPT_DIR}/scripts/01_extract_descriptors.py" ;;
+        02) file="${SCRIPT_DIR}/scripts/02_train.py" ;;
+        03) file="${SCRIPT_DIR}/scripts/03_post_training_analysis.py" ;;
+        04) file="${SCRIPT_DIR}/scripts/04_apply_cv.py" ;;
         *)
             echo "ERROR: Unknown step '${step}'. Valid steps: 01 02 03 04"
             exit 1
