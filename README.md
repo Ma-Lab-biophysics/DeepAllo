@@ -39,7 +39,14 @@ topology and discovers trajectories under `examples/Trajs/<state>/`.
 
 Two archived models are supplied. `Model_Apo_vs_Mava` uses the 46 contact
 descriptors in `descriptors/Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM`
-uses the 69 descriptors in `descriptors/Apo_vs_Ome_contacts.xlsx`. Set `MAVA_DIR`, `LABEL_MAVA` and
+uses the 69 descriptors in `descriptors/Apo_vs_Ome_contacts.xlsx`.
+
+A contacts workbook must provide `Residue 1 (sim)` and `Residue 2 (sim)`
+columns, whose numbering must match the topology. The `(crystal)` columns are
+optional and exist only because this system's simulation numbering is offset
+from the crystallographic numbering used in the paper; when they are present,
+step 03 adds a `pair_label_crystal` column to `sensitivity_scores.csv`. Omit
+them for systems where the two numberings coincide. Set `MAVA_DIR`, `LABEL_MAVA` and
 `CONTACTS_XLSX` in `scripts/config.py` to select which comparison to run.
 
 Data and output paths are resolved relative to the repository root rather

@@ -23,3 +23,7 @@ __pycache__/
 
 # Reference outputs kept locally, not distributed
 *_sensitivity.csv
+
+# MDAnalysis writes trajectory offset caches next to each .xtc
+*_offsets.npz
+*_offsets.lock

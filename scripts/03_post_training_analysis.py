@@ -102,15 +102,27 @@ def _contact_column(columns, residue_number: int, numbering: str):
 
 
 def load_crystal_pair_labels(xlsx_path: Path, pair_labels):
-    """Load crystal-numbered labels and verify their order against sim labels."""
+    """Load crystal-numbered labels and verify their order against sim labels.
+
+    The "(crystal)" columns are optional. Systems whose simulation numbering
+    already matches the reference numbering can omit them, in which case the
+    simulation labels are returned unchanged and pair_label_crystal in the
+    output simply mirrors pair_label. The order and count checks against
+    pairs_labels.npy are applied either way.
+    """
     workbook_path = _required(Path(xlsx_path))
     contacts = pd.read_excel(workbook_path)
     sim1 = _contact_column(contacts.columns, 1, "sim")
     sim2 = _contact_column(contacts.columns, 2, "sim")
-    crystal1 = _contact_column(contacts.columns, 1, "crystal")
-    crystal2 = _contact_column(contacts.columns, 2, "crystal")
+    try:
+        crystal1 = _contact_column(contacts.columns, 1, "crystal")
+        crystal2 = _contact_column(contacts.columns, 2, "crystal")
+    except ValueError:
+        crystal1 = crystal2 = None
 
-    required_columns = [sim1, sim2, crystal1, crystal2]
+    required_columns = [sim1, sim2]
+    if crystal1 is not None:
+        required_columns += [crystal1, crystal2]
     if contacts[required_columns].isna().any().any():
         raise ValueError(
             f"Blank simulation or crystal residue labels found in {workbook_path}."
@@ -123,7 +135,6 @@ def load_crystal_pair_labels(xlsx_path: Path, pair_labels):
         ])
 
     workbook_sim_labels = combine(sim1, sim2)
-    crystal_labels = combine(crystal1, crystal2)
     pair_labels = np.asarray(pair_labels, dtype=str)
     if len(workbook_sim_labels) != len(pair_labels):
         raise ValueError(
@@ -139,7 +150,9 @@ def load_crystal_pair_labels(xlsx_path: Path, pair_labels):
             f"at feature {index}: {pair_labels[index]!r} versus "
             f"{workbook_sim_labels[index]!r}."
         )
-    return crystal_labels
+    if crystal1 is None:
+        return workbook_sim_labels
+    return combine(crystal1, crystal2)
 
 
 def resolve_model_path(requested: Path | None) -> Path:
