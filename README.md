@@ -1,4 +1,4 @@
-# DeepAllo: probing protein allostery with molecular dynamics and deep-learning-based analysis
+# DeepAllo: probing protein allostery with molecular dynamics and deep learning
 
 This tool extracts residue center-of-mass distance descriptors from
 MD trajectories and trains a deep learning model. 
