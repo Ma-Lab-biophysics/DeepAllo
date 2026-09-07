@@ -1,7 +1,7 @@
-# DeepAllo: probing protein allostery with deep-learning-based analysis
+# DeepAllo: probing protein allostery with molecular dynamics and deep-learning-based analysis
 
 This tool extracts residue center-of-mass distance descriptors from
-MD trajectories and trains a two-state DeepLDA model. 
+MD trajectories and trains a deep learning model. 
 The example tests a small-molecule modulator (Mava) effect on the myosin motor domain. 
 Apo is state 1 and Mava is state 2.
 
