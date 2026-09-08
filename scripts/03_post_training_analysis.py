@@ -362,6 +362,7 @@ def save_sensitivity(
         OUT_DIR / "sensitivity_top_feature_gradients.npz",
         feature_indices=top,
         pair_labels=pair_labels[top],
+        pair_labels_crystal=pair_labels_crystal[top],
         normalized_gradients=per_frame[:, top].astype(np.float32),
         training_labels=labels.astype(np.int8),
     )
@@ -380,14 +381,20 @@ def save_sensitivity(
     return rank
 
 
-def plot_sensitivity(scores, std_scores, per_frame, labels, pair_labels, rank):
+def plot_sensitivity(scores, std_scores, per_frame, labels, pair_labels,
+                     pair_labels_crystal, rank):
+    """Figures are labelled with the crystallographic numbering used in the
+    manuscript. pair_labels_crystal falls back to the simulation labels when
+    the workbook has no '(crystal)' columns, so plots stay correct either way.
+    The simulation labels are kept for the machine-readable outputs."""
+    shown = pair_labels_crystal
     count = min(TOP_N_FEATURES, len(rank))
     selected = rank[:count][::-1]
     fig, ax = plt.subplots(figsize=(10.5, max(6.5, 0.36 * count)), dpi=150)
     positions = np.arange(count)
     ax.barh(positions, scores[selected], xerr=std_scores[selected], capsize=2)
     ax.set_yticks(positions)
-    ax.set_yticklabels(pair_labels[selected], fontsize=10)
+    ax.set_yticklabels(shown[selected], fontsize=10)
     ax.set_xlabel("Normalized sensitivity", fontweight="bold")
     ax.set_title("Whole-residue COM-distance sensitivity", fontweight="bold")
     ax.set_xlim(left=0)
@@ -402,7 +409,7 @@ def plot_sensitivity(scores, std_scores, per_frame, labels, pair_labels, rank):
                   orientation="horizontal", showmeans=True,
                   showextrema=False, widths=0.8)
     ax.set_yticks(np.arange(count_v))
-    ax.set_yticklabels(pair_labels[selected_v], fontsize=10)
+    ax.set_yticklabels(shown[selected_v], fontsize=10)
     ax.set_xlabel("Per-frame normalized sensitivity", fontweight="bold")
     ax.set_title("Training-frame sensitivity distributions", fontweight="bold")
     ax.set_xlim(left=0)
@@ -417,6 +424,7 @@ def plot_sensitivity(scores, std_scores, per_frame, labels, pair_labels, rank):
         for state_code, state_label in enumerate((LABEL_APO, LABEL_MAVA)):
             values = per_frame[labels == state_code, feature_index]
             rows.append({
+                "pair_label_crystal": pair_labels_crystal[feature_index],
                 "pair_label": pair_labels[feature_index],
                 "state": state_label,
                 "mean": float(values.mean()),
@@ -433,7 +441,7 @@ def plot_sensitivity(scores, std_scores, per_frame, labels, pair_labels, rank):
         means = [per_frame[labels == state_code, i].mean() for i in selected_s]
         ax.bar(x + (state_code - 0.5) * width, means, width=width, label=state_label)
     ax.set_xticks(x)
-    ax.set_xticklabels(pair_labels[selected_s], rotation=45, ha="right", fontsize=9)
+    ax.set_xticklabels(shown[selected_s], rotation=45, ha="right", fontsize=9)
     ax.set_ylabel("Mean normalized sensitivity", fontweight="bold")
     ax.legend(frameon=False)
     fig.tight_layout()
@@ -549,7 +557,8 @@ def main():
         scores, std_scores, per_frame, training_labels, pair_labels,
         pair_labels_crystal, training_std, denominator,
     )
-    plot_sensitivity(scores, std_scores, per_frame, training_labels, pair_labels, rank)
+    plot_sensitivity(scores, std_scores, per_frame, training_labels, pair_labels,
+                     pair_labels_crystal, rank)
 
     print("Computing descriptive Cohen's d ...")
     cohens = compute_cohens_d(cv_apo, cv_mava)
@@ -577,7 +586,8 @@ def main():
 
     print("\nTop 10 sensitivity features:")
     for position, feature_index in enumerate(rank[:10], start=1):
-        print(f"  {position:>2}. {pair_labels[feature_index]:30s} {scores[feature_index]:.6f}")
+        print(f"  {position:>2}. {pair_labels_crystal[feature_index]:24s} "
+              f"(sim {pair_labels[feature_index]:22s}) {scores[feature_index]:.6f}")
     print(f"\nCohen's d ({LABEL_MAVA} - {LABEL_APO}): "
           f"{cohens['cohens_d_state2_minus_state1']:.4f}")
     print("\nPOST-TRAINING ANALYSIS COMPLETE. The model was not retrained.\n")
