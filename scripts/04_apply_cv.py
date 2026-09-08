@@ -112,6 +112,11 @@ OUTPUT_DIR = "Apo_GAMD_output"
 # Rule of thumb: ~5–10 % of one replica length.
 PROB_WINDOW = 500
 
+# Frames further than this many standard deviations from the nearer reference
+# distribution are flagged as poorly supported by both references. Their
+# probability is still reported but should not be interpreted.
+SUPPORT_Z_MAX = 5.0
+
 # ── Plotting -----------------------------------------------------------------
 SIM_COLOR   = "#984ea3"    # purple — colour for the new simulation
 TEMPERATURE = 300.0        # K — for FES in kT units
@@ -380,50 +385,77 @@ def project_all(traj_list, heavy_indices, res_slices,
 # 4. State probability calculation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def assign_frame_probabilities(cv_sim, cv_ref1, cv_ref2, window):
+def assign_frame_probabilities(cv_sim, cv_ref1, cv_ref2, window, boundaries):
     """
     Per-frame state probability estimated two ways:
 
     (a) Hard assignment  — each frame is assigned to the nearer reference
         mean. Binary: 1 = state1, 0 = state2.
 
-    (b) Soft probability — Gaussian kernel probability:
-            P(state1 | s) = N(s; mu1, sigma1) / [N(s; mu1, s1) + N(s; mu2, s2)]
-        smoothed with a sliding window of width `window` frames.
+    (b) Soft probability — Gaussian likelihood ratio
+            P(state1 | s) = N(s; mu1, s1) / [N(s; mu1, s1) + N(s; mu2, s2)]
+        evaluated in log space, then smoothed with a sliding window of
+        `window` frames applied independently within each replica.
+
+    Two numerical points matter here. Narrow, well-separated reference
+    distributions make both Gaussian densities underflow to zero far from
+    both means, so the ratio must be formed from log densities; computing it
+    directly (and guarding the denominator with a small epsilon) returns 0
+    instead of the correct value, and the epsilon itself dominates whenever
+    the densities fall below it. Smoothing must also stay inside a replica:
+    applied to the concatenated vector it blends the end of one independent
+    trajectory into the start of the next.
+
+    Far from both references the ratio is still well defined but not
+    meaningful — whichever reference is wider wins the tail. Frames further
+    than SUPPORT_Z_MAX standard deviations from the nearer reference are
+    therefore flagged rather than silently reported.
 
     Returns
     -------
     hard_assign  : int8 array  (n_frames,)  — 1=state1, 0=state2
     p_state1_raw : float32     (n_frames,)  — unsmoothed soft P(state1)
-    p_state1_sm  : float32     (n_frames,)  — window-smoothed P(state1)
+    p_state1_sm  : float32     (n_frames,)  — per-replica smoothed P(state1)
+    poorly_supported : bool    (n_frames,)  — outside both reference supports
     """
     mu1, s1 = cv_ref1.mean(), cv_ref1.std()
     mu2, s2 = cv_ref2.mean(), cv_ref2.std()
 
-    # Soft probability via Gaussian density ratio
-    def _gauss(x, mu, sigma):
-        return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / sigma
+    # Soft probability via a log-space Gaussian likelihood ratio
+    def _logpdf(x, mu, sigma):
+        return -0.5 * ((x - mu) / sigma) ** 2 - np.log(sigma)
 
-    g1 = _gauss(cv_sim, mu1, s1)
-    g2 = _gauss(cv_sim, mu2, s2)
-    p1_raw = g1 / (g1 + g2 + 1e-30)
+    l1 = _logpdf(cv_sim, mu1, s1)
+    l2 = _logpdf(cv_sim, mu2, s2)
+    shift = np.maximum(l1, l2)                 # stabilise before exponentiating
+    e1, e2 = np.exp(l1 - shift), np.exp(l2 - shift)
+    p1_raw = e1 / (e1 + e2)
 
-    # Sliding-window smoothing
-    w      = max(1, window)
-    p1_sm  = uniform_filter1d(p1_raw.astype(np.float64), size=w,
-                               mode="nearest").astype(np.float32)
+    # Sliding-window smoothing, applied within each replica
+    w = max(1, window)
+    p1_sm = np.empty_like(p1_raw, dtype=np.float64)
+    for start, end in boundaries:
+        p1_sm[start:end] = uniform_filter1d(
+            p1_raw[start:end].astype(np.float64), size=w, mode="nearest"
+        )
+
+    # Frames that neither reference plausibly generated
+    z_nearest = np.minimum(np.abs(cv_sim - mu1) / s1, np.abs(cv_sim - mu2) / s2)
+    poorly_supported = z_nearest > SUPPORT_Z_MAX
 
     # Hard assignment
     hard = (np.abs(cv_sim - mu1) < np.abs(cv_sim - mu2)).astype(np.int8)
 
-    return hard, p1_raw.astype(np.float32), p1_sm
+    return (hard, p1_raw.astype(np.float32), p1_sm.astype(np.float32),
+            poorly_supported)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. CSV output
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_csv(cv_all, hard_assign, p1_raw, p1_sm, boundaries, traj_list):
+def save_csv(cv_all, hard_assign, p1_raw, p1_sm, poorly_supported,
+             boundaries, traj_list):
     n = len(cv_all)
     rep   = np.full(n, -1, dtype=np.int32)
     local = np.full(n, -1, dtype=np.int32)
@@ -444,6 +476,7 @@ def save_csv(cv_all, hard_assign, p1_raw, p1_sm, boundaries, traj_list):
         f"P_{LABEL_STATE1}":    p1_raw,
         f"P_{LABEL_STATE1}_smoothed": p1_sm,
         f"P_{LABEL_STATE2}_smoothed": 1 - p1_sm,
+        "poorly_supported":     poorly_supported,
     })
     path = os.path.join(OUTPUT_DIR, f"{SIM_LABEL}_cv_values.csv")
     df.to_csv(path, index=False)
@@ -863,11 +896,14 @@ def main():
 
     # 7. Probability
     print(f"\n[7/8] Computing per-frame state probabilities …")
-    hard_assign, p1_raw, p1_sm = assign_frame_probabilities(
-        cv_sim, cv_ref1, cv_ref2, PROB_WINDOW
+    hard_assign, p1_raw, p1_sm, poorly_supported = assign_frame_probabilities(
+        cv_sim, cv_ref1, cv_ref2, PROB_WINDOW, boundaries
     )
     print(f"  Mean P({LABEL_STATE1}) over all frames : {p1_sm.mean():.3f}")
     print(f"  Mean P({LABEL_STATE2}) over all frames : {(1-p1_sm).mean():.3f}")
+    n_poor = int(poorly_supported.sum())
+    print(f"  Frames poorly supported by both references "
+          f"(> {SUPPORT_Z_MAX:g} SD): {n_poor:,} ({100*n_poor/len(cv_sim):.2f}%)")
 
     # 8. Save + plot
     print(f"\n[8/8] Saving outputs and generating figures …")
@@ -875,7 +911,8 @@ def main():
     np.save(os.path.join(OUTPUT_DIR, f"{SIM_LABEL}_replica_boundaries.npy"), boundaries)
     np.save(os.path.join(OUTPUT_DIR, f"{SIM_LABEL}_p_state1.npy"),        p1_sm)
 
-    save_csv(cv_sim, hard_assign, p1_raw, p1_sm, boundaries, traj_list)
+    save_csv(cv_sim, hard_assign, p1_raw, p1_sm, poorly_supported,
+             boundaries, traj_list)
 
     plot_cv_vs_time(
         cv_sim, boundaries,
