@@ -22,9 +22,9 @@ DeepAllo/
 │   └── Apo_vs_Ome_contacts.xlsx
 ├── examples/                     # strided demo data only
 │   └── Trajs/
-│       ├── Apo/{topology.pdb, replica1.xtc}
-│       ├── Mava/{topology.pdb, replica1.xtc}
-│       └── Ome/{topology.pdb, replica1.xtc}
+│       ├── Apo/
+│       ├── Mava/
+│       └── Ome/
 └── weights_files/
     ├── Model_Apo_vs_Mava/
     │   ├── deeplda_model.pt
@@ -37,10 +37,7 @@ DeepAllo/
 `scripts/config.py` uses `examples/Trajs/Apo/topology.pdb` as the shared
 topology and discovers trajectories under `examples/Trajs/<state>/`. 
 
-Two archived models are supplied. `Model_Apo_vs_Mava` uses the 46 contact
-descriptors in `descriptors/Apo_vs_Mava_contacts.xlsx`; `Model_Apo_vs_OM`
-uses the 69 descriptors in `descriptors/Apo_vs_Ome_contacts.xlsx`.
-
+Two archived models are supplied: `Model_Apo_vs_Mava` and `Model_Apo_vs_OM`.
 Set `MAVA_DIR`, `LABEL_MAVA` and `CONTACTS_XLSX` in `scripts/config.py` to select which comparison to run.
 
 ## Install dependencies
