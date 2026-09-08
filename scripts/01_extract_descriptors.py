@@ -13,14 +13,6 @@ For each contact pair (Residue 1 (sim), Residue 2 (sim)) in the xlsx:
   • No GLY fallback needed — every residue has backbone heavy atoms.
   • Distance = ||COM_res_1 – COM_res_2||  per frame  [Å].
 
-Memory-safe design (memmap)
-────────────────────────────
-  1. Count total strided frames per state (no coord data loaded).
-  2. Pre-allocate a memory-mapped .npy file for the entire state.
-  3. For each replica: load all-heavy coords → compute residue COMs in
-     CHUNK_FRAMES-row batches → write directly to the memmap slice.
-  4. Peak RAM ≈ 1 replica's heavy coords + 1 chunk's COM buffer.
-
 Outputs (in OUT_DIR)  — names depend on LABEL_APO / LABEL_MAVA in config.py:
   descriptors_<state1>.npy          (n_frames_state1, n_pairs)  float32
   descriptors_<state2>.npy          (n_frames_state2, n_pairs)  float32
