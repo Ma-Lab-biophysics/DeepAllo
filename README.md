@@ -106,8 +106,10 @@ python scripts/03_post_training_analysis.py \
   --model weights_files/Model_Apo_vs_Mava/deeplda_model.pt
 ```
 
-Two archived models are supplied: `Model_Apo_vs_Mava` and `Model_Apo_vs_OM`.
-Set `MAVA_DIR`, `LABEL_MAVA` and `CONTACTS_XLSX` in `scripts/config.py` to select which comparison to run.
+Two archived models are supplied: Model_Apo_vs_Mava, 
+which uses the 46 descriptors in descriptors/Apo_vs_Mava_contacts.xlsx, 
+and Model_Apo_vs_OM, which uses the 69 in descriptors/Apo_vs_Ome_contacts.xlsx. 
+Set MAVA_DIR, LABEL_MAVA and CONTACTS_XLSX in scripts/config.py to select which comparison to run.
 
 ## Main outputs
 
