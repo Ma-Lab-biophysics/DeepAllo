@@ -53,7 +53,6 @@ Activate this environment in each new terminal before using the pipeline:
 conda activate deep-allo
 ```
 
-
 ## Workflow A: train a new model from scratch
 
 Run the complete current pipeline with:
@@ -91,6 +90,8 @@ under `models/`. Copy any locally trained model that must be retained before
 running Step 02 again.
 
 ## Workflow B: reproduce results from the archived model
+
+This workflow never invokes Step 02 and therefore does not retrain a model.
 
 First generate the descriptors:
 
