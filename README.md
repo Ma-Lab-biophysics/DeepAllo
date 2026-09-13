@@ -51,7 +51,7 @@ conda activate deep-allo
 ```
 
 
-## Configure the two input states
+## Configure the input states
 
 All settings that normally need to be changed are grouped in the
 `USER CONFIGURATION` block near the top of `scripts/config.py`. By default,
