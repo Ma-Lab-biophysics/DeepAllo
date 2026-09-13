@@ -34,9 +34,6 @@ DeepAllo/
         └── deeplda_model_full.pt
 ```
 
-`scripts/config.py` uses `examples/Trajs/Apo/topology.pdb` as the shared
-topology and discovers trajectories under `examples/Trajs/<state>/`. 
-
 ## Install dependencies
 
 Create the pinned `deep-allo` Conda environment from the supplied environment
@@ -52,6 +49,14 @@ Activate this environment in each new terminal before using the pipeline:
 ```bash
 conda activate deep-allo
 ```
+
+
+## Configure the two input states
+
+All settings that normally need to be changed are grouped in the
+`USER CONFIGURATION` block near the top of `scripts/config.py`. By default,
+the pipeline uses the bundled trajectories under `examples/Trajs/`. Set the
+state folders, labels, and `CONTACTS_XLSX` in this block to select a comparison.
 
 ## Workflow A: train a new model from scratch
 
@@ -106,11 +111,11 @@ python scripts/03_post_training_analysis.py \
   --model weights_files/Model_Apo_vs_Mava/deeplda_model.pt
 ```
 
-Two archived models are supplied: `Model_Apo_vs_Mava`, which uses the 46
-descriptors in `descriptors/Apo_vs_Mava_contacts.xlsx`, and
-`Model_Apo_vs_OM`, which uses the 69 in `descriptors/Apo_vs_Ome_contacts.xlsx`.
-Set `MAVA_DIR`, `LABEL_MAVA` and `CONTACTS_XLSX` in `scripts/config.py` to
-select which comparison to run.
+The contact definitions used for two archived DeepAllo runs are supplied as
+`descriptors/Apo_vs_Mava_contacts.xlsx` and
+`descriptors/Apo_vs_Ome_contacts.xlsx`.
+Set the state folders, labels, and `CONTACTS_XLSX` in the `USER CONFIGURATION`
+block of `scripts/config.py` to select which comparison to run.
 
 ## Main outputs
 
@@ -128,8 +133,6 @@ of `scripts/04_apply_cv.py` before running Step 04.
 frame; 50 frames). It exists so the pipeline can be exercised end
 to end in seconds, and it is not sufficient to reproduce the published results.
 
-To reproduce the paper, one needs the full trajectories from Zenodo (28 Apo,
-27 Mava and 28 OM replicas) and replace the contents of `examples/Trajs/<state>/`,
-keeping the tracked `topology.pdb` in place.
-
-
+To reproduce the paper, obtain the full trajectories and replace both the
+demonstration `.xtc` files and `topology.pdb` in each
+`examples/Trajs/<state>/` directory with the corresponding full-system files.

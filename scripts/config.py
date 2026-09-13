@@ -5,30 +5,51 @@ Central configuration for the DeepLDA pipeline.
 Edit only this file to adapt the pipeline to a new system.
 """
 
+import glob as _glob
 import os
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Paths
-# ─────────────────────────────────────────────────────────────────────────────
+import re as _re
 
 # config.py lives in scripts/, so the project root is one level up. All data
 # and output paths below are resolved relative to that root, not to scripts/.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Trajectories live under examples/Trajs/<state>/. The repository ships a
-# strided single-replica demo set there; replace it with the full replicas
-# from Zenodo to reproduce the published results.
+# ═════════════════════════════════════════════════════════════════════════════
+# USER CONFIGURATION — edit this block to select the two input states
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Bundled strided demo trajectories:
 TRAJS_DIR = os.path.join(ROOT_DIR, "examples", "Trajs")
 
-# The topology files distributed with Apo, Mava, and Ome are identical. Use
-# the Apo copy as the shared topology for descriptor extraction.
-TOPOLOGY = os.path.join(TRAJS_DIR, "Apo", "topology.pdb")
+STATE1_FOLDER = "Apo"
+STATE2_FOLDER = "Mava"
 
-APO_DIR = os.path.join(TRAJS_DIR, "Apo")       # first state
-MAVA_DIR = os.path.join(TRAJS_DIR, "Mava")     # second state
+# Labels drive output filenames, plot labels, and printed summaries.
+STATE1_LABEL = "Apo"
+STATE2_LABEL = "Mava"
 
-import re as _re
-import glob as _glob
+CONTACTS_XLSX = os.path.join(
+    ROOT_DIR, "descriptors", "Apo_vs_Mava_contacts.xlsx"
+)
+
+STRIDE_TRAIN = 1
+
+# DeepLDA evaluates a symmetric eigendecomposition during training.
+# Use "cuda" for an NVIDIA GPU. Apple MPS does not implement the required
+# torch.linalg.eigh operation, so use "cpu" on Apple Silicon.
+TRAIN_ACCELERATOR = "cpu"
+TRAIN_DEVICES = 1
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DERIVED PATHS — normally do not edit below this line
+# ═════════════════════════════════════════════════════════════════════════════
+
+STATE1_DIR = os.path.join(TRAJS_DIR, STATE1_FOLDER)
+STATE2_DIR = os.path.join(TRAJS_DIR, STATE2_FOLDER)
+
+# Each state is read with the topology stored in its own trajectory directory.
+STATE1_TOPOLOGY = os.path.join(STATE1_DIR, "topology.pdb")
+STATE2_TOPOLOGY = os.path.join(STATE2_DIR, "topology.pdb")
+
 
 def _natural_sort_key(s):
     return [int(t) if t.isdigit() else t.lower()
@@ -39,21 +60,25 @@ def _find_trajs(directory):
     if not files:
         raise FileNotFoundError(
             f"No .xtc files found in {directory!r}. "
-            "Check TRAJS_DIR / APO_DIR / MAVA_DIR in config.py."
+            "Check TRAJS_DIR / STATE1_FOLDER / STATE2_FOLDER in config.py."
         )
     return sorted(files, key=_natural_sort_key)
 
-APO_TRAJS = _find_trajs(APO_DIR)
-MAVA_TRAJS  = _find_trajs(MAVA_DIR)
+STATE1_TRAJS = _find_trajs(STATE1_DIR)
+STATE2_TRAJS = _find_trajs(STATE2_DIR)
 
-N_REPLICAS_APO = len(APO_TRAJS)
-N_REPLICAS_MAVA  = len(MAVA_TRAJS)
+N_REPLICAS_STATE1 = len(STATE1_TRAJS)
+N_REPLICAS_STATE2 = len(STATE2_TRAJS)
 
-# State labels — drive ALL output filenames, plot labels, and print statements.
-LABEL_APO = "Apo"
-LABEL_MAVA  = "Mava"
-
-CONTACTS_XLSX = os.path.join(ROOT_DIR, "descriptors", "Apo_vs_Mava_contacts.xlsx")
+# Compatibility aliases used by the existing training and analysis scripts.
+APO_DIR = STATE1_DIR
+MAVA_DIR = STATE2_DIR
+APO_TRAJS = STATE1_TRAJS
+MAVA_TRAJS = STATE2_TRAJS
+N_REPLICAS_APO = N_REPLICAS_STATE1
+N_REPLICAS_MAVA = N_REPLICAS_STATE2
+LABEL_APO = STATE1_LABEL
+LABEL_MAVA = STATE2_LABEL
 
 OUT_DIR     = os.path.join(ROOT_DIR, "output")
 MODELS_DIR  = os.path.join(ROOT_DIR, "models")
@@ -66,7 +91,6 @@ for _d in (OUT_DIR, MODELS_DIR, FIGURES_DIR):
 # Trajectory / descriptor settings
 # ─────────────────────────────────────────────────────────────────────────────
 
-STRIDE_TRAIN   = 1
 MIN_SEQ_SEP    = 5
 BACKBONE_NAMES = {"N", "CA", "C", "O", "OXT"}
 
@@ -92,12 +116,6 @@ MAX_EPOCHS           = None
 EARLY_STOPPING_PATIENCE  = 50
 EARLY_STOPPING_MIN_DELTA = 1e-3
 SEED                 = 42
-
-# DeepLDA evaluates a symmetric eigendecomposition during training.
-# torch.linalg.eigh is not implemented by PyTorch's Apple MPS backend, so use
-# CPU explicitly on macOS and elsewhere for a portable, reproducible run.
-TRAIN_ACCELERATOR = "cpu"
-TRAIN_DEVICES = 1
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Analysis
