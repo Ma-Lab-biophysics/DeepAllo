@@ -3,12 +3,12 @@
 ─────────────────────────
 Load every individual replica trajectory for both configured states, compute
 whole-residue centre-of-mass (COM) distances for the contact pairs
-defined in CONTACTS_XLSX, and record exact per-replica frame boundaries
+defined in FEATURES_FILE, and record exact per-replica frame boundaries
 for replica-aware splitting.
 
 Descriptor definition
 ─────────────────────
-For each contact pair (Residue 1 (sim), Residue 2 (sim)) in the xlsx:
+For each ordered contact pair in the configured DAT feature file:
   • Residue atoms  = ALL heavy atoms (backbone N, CA, C, O, OXT included).
   • No GLY fallback needed — every residue has backbone heavy atoms.
   • Distance = ||COM_res_1 – COM_res_2||  per frame  [Å].
@@ -18,7 +18,7 @@ Topology requirements
 Step 01 builds atom selections independently from the topology configured for
 each state. The topology files may differ in atom count or atom ordering, but
 each trajectory must match its own topology. Every residue referenced by the
-"Residue 1 (sim)" and "Residue 2 (sim)" workbook columns must exist uniquely,
+feature-file residues must exist uniquely,
 with consistent residue numbering and identity, in both topologies.
 
 Outputs (in OUT_DIR) — names depend on STATE1_LABEL / STATE2_LABEL in config.py:
@@ -36,7 +36,6 @@ import time
 from functools import reduce
 
 import numpy as np
-import pandas as pd
 import MDAnalysis as mda
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,8 +45,9 @@ from config import (
     N_REPLICAS_STATE1, N_REPLICAS_STATE2,
     STATE1_LABEL, STATE2_LABEL,
     STRIDE_TRAIN, OUT_DIR,
-    CONTACTS_XLSX,
+    FEATURES_FILE,
 )
+from contact_features import load_contact_features
 
 # Frames processed per vectorised chunk.
 # Peak RAM per chunk ≈ CHUNK_FRAMES × n_heavy_atoms × 3 × 4 B
@@ -92,16 +92,15 @@ def get_residue_atomgroup(universe, resname, resid, topology_path):
 
     Raises ValueError if the residue is absent from the topology, if the
     resid is not unique, or if the topology residue name disagrees with the
-    name given in CONTACTS_XLSX. The name check guards against a silent
-    numbering mismatch: the xlsx carries both simulation and crystal
-    numbering (which differ by an offset), and selecting on resid alone
-    would otherwise happily build descriptors from the wrong residues.
+    name given in FEATURES_FILE. The name check guards against a silent
+    numbering mismatch; selecting on resid alone could otherwise build
+    descriptors from the wrong residues.
     """
     ag = universe.select_atoms(f"resid {resid} and not type H")
     if len(ag) == 0:
         raise ValueError(
             f"Residue {resname}:{resid} not found in {topology_path}. "
-            f"Check that the 'Residue N (sim)' columns of {CONTACTS_XLSX} "
+            f"Check that the residue labels in {FEATURES_FILE} "
             f"use the same numbering as the topology."
         )
 
@@ -119,34 +118,27 @@ def get_residue_atomgroup(universe, resname, resid, topology_path):
     found = residues[0].resname
     if not _resname_matches(resname, found):
         raise ValueError(
-            f"Residue-name mismatch at resid {resid}: {CONTACTS_XLSX} says "
+            f"Residue-name mismatch at resid {resid}: {FEATURES_FILE} says "
             f"{resname}, {topology_path} has {found}. This usually means the "
-            f"contact list and the topology use different residue numbering "
-            f"(the xlsx 'sim' and 'crystal' columns differ by an offset) — "
-            f"verify that the 'Residue N (sim)' columns are being read."
+            f"contact list and the topology use different residue numbering."
         )
     return ag
 
 
-def build_residue_selections_from_xlsx(universe, xlsx_path, topology_path):
+def build_residue_selections(universe, feature_path, topology_path):
     """
-    Load contact pairs from xlsx and build whole-residue heavy-atom selections.
+    Load contact pairs and build whole-residue heavy-atom selections.
 
     Returns
     -------
     dict containing topology-specific atom selections and shared pair metadata
     """
-    df = pd.read_excel(xlsx_path)
-    res1_col = [c for c in df.columns if "Residue 1" in c and "sim" in c][0]
-    res2_col = [c for c in df.columns if "Residue 2" in c and "sim" in c][0]
-
     pairs_raw = [
-        (parse_residue_string(row[res1_col]),
-         parse_residue_string(row[res2_col]))
-        for _, row in df.iterrows()
+        (parse_residue_string(first), parse_residue_string(second))
+        for first, second in load_contact_features(feature_path).simulation_pairs
     ]
     n_pairs = len(pairs_raw)
-    print(f"    Contact pairs loaded from xlsx : {n_pairs}")
+    print(f"    Contact pairs loaded from file : {n_pairs}")
 
     # Unique residues (insertion-order preserved)
     seen, unique_residues = {}, []
@@ -210,7 +202,7 @@ def verify_same_contact_order(state1_features, state2_features):
         if not np.array_equal(state1_features[key], state2_features[key]):
             raise ValueError(
                 f"The two states produced inconsistent {key}. Both states "
-                "must use the same ordered contact pairs from CONTACTS_XLSX."
+                "must use the same ordered contact pairs from FEATURES_FILE."
             )
 
 
@@ -330,7 +322,7 @@ def main():
     print("=" * 65)
     print("  Descriptor : whole-residue COM distance [Å]")
     print("               (all heavy atoms — backbone + side-chain)")
-    print(f"  Pairs      : loaded from {CONTACTS_XLSX}")
+    print(f"  Pairs      : loaded from {FEATURES_FILE}")
     if os.path.realpath(STATE1_TOPOLOGY) == os.path.realpath(STATE2_TOPOLOGY):
         print("\nWARNING — SHARED TOPOLOGY")
         print("  Both states are configured to use the same topology file.")
@@ -349,12 +341,12 @@ def main():
     # Build topology-specific selections from the same ordered contact list.
     print(f"\n[2/5] Building whole-residue heavy-atom selections …")
     print(f"  {STATE1_LABEL} topology: {STATE1_TOPOLOGY}")
-    state1_features = build_residue_selections_from_xlsx(
-        mda.Universe(STATE1_TOPOLOGY), CONTACTS_XLSX, STATE1_TOPOLOGY
+    state1_features = build_residue_selections(
+        mda.Universe(STATE1_TOPOLOGY), FEATURES_FILE, STATE1_TOPOLOGY
     )
     print(f"  {STATE2_LABEL} topology: {STATE2_TOPOLOGY}")
-    state2_features = build_residue_selections_from_xlsx(
-        mda.Universe(STATE2_TOPOLOGY), CONTACTS_XLSX, STATE2_TOPOLOGY
+    state2_features = build_residue_selections(
+        mda.Universe(STATE2_TOPOLOGY), FEATURES_FILE, STATE2_TOPOLOGY
     )
     verify_same_contact_order(state1_features, state2_features)
 

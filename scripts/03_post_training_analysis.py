@@ -43,8 +43,9 @@ from config import (  # noqa: E402
     LABEL_APO, LABEL_MAVA,
     TRAIN_FRAC, REPLICA_AWARE_SPLIT, VALID_REPLICA_FRAC, SEED,
     FES_BINS, NN_HIDDEN, NN_ACTIVATION, N_STATES,
-    CONTACTS_XLSX,
+    FEATURES_FILE, CRYSTAL_NUMBERING_OFFSET,
 )
+from contact_features import load_contact_features  # noqa: E402
 
 OUT_DIR = Path(OUT_DIR)
 MODELS_DIR = Path(MODELS_DIR)
@@ -85,74 +86,40 @@ def _required(path: Path) -> Path:
     return path
 
 
-def _contact_column(columns, residue_number: int, numbering: str):
-    """Find one residue-numbering column despite spaces/newlines in its header."""
-    prefix = f"residue {residue_number}"
-    matches = []
-    for column in columns:
-        normalized = " ".join(str(column).casefold().split())
-        if prefix in normalized and numbering.casefold() in normalized:
-            matches.append(column)
-    if len(matches) != 1:
-        raise ValueError(
-            f"Expected exactly one '{prefix} ({numbering})' column in "
-            f"{CONTACTS_XLSX}; found {len(matches)}."
-        )
-    return matches[0]
+def load_crystal_pair_labels(feature_path: Path, pair_labels, offset: int):
+    """Verify DAT feature order and shift residue numbers for display."""
+    feature_path = _required(Path(feature_path))
+    contacts = load_contact_features(feature_path)
 
+    def combine(pairs):
+        return np.asarray([f"{left}-{right}" for left, right in pairs])
 
-def load_crystal_pair_labels(xlsx_path: Path, pair_labels):
-    """Load crystal-numbered labels and verify their order against sim labels.
-
-    The "(crystal)" columns are optional. Systems whose simulation numbering
-    already matches the reference numbering can omit them, in which case the
-    simulation labels are returned unchanged and pair_label_crystal in the
-    output simply mirrors pair_label. The order and count checks against
-    pairs_labels.npy are applied either way.
-    """
-    workbook_path = _required(Path(xlsx_path))
-    contacts = pd.read_excel(workbook_path)
-    sim1 = _contact_column(contacts.columns, 1, "sim")
-    sim2 = _contact_column(contacts.columns, 2, "sim")
-    try:
-        crystal1 = _contact_column(contacts.columns, 1, "crystal")
-        crystal2 = _contact_column(contacts.columns, 2, "crystal")
-    except ValueError:
-        crystal1 = crystal2 = None
-
-    required_columns = [sim1, sim2]
-    if crystal1 is not None:
-        required_columns += [crystal1, crystal2]
-    if contacts[required_columns].isna().any().any():
-        raise ValueError(
-            f"Blank simulation or crystal residue labels found in {workbook_path}."
-        )
-
-    def combine(first, second):
-        return np.asarray([
-            f"{str(left).strip()}-{str(right).strip()}"
-            for left, right in zip(contacts[first], contacts[second])
-        ])
-
-    workbook_sim_labels = combine(sim1, sim2)
+    file_sim_labels = combine(contacts.simulation_pairs)
     pair_labels = np.asarray(pair_labels, dtype=str)
-    if len(workbook_sim_labels) != len(pair_labels):
+    if len(file_sim_labels) != len(pair_labels):
         raise ValueError(
             "Contact count mismatch between pairs_labels.npy "
-            f"({len(pair_labels)}) and {workbook_path} "
-            f"({len(workbook_sim_labels)})."
+            f"({len(pair_labels)}) and {feature_path} "
+            f"({len(file_sim_labels)})."
         )
-    mismatches = np.flatnonzero(workbook_sim_labels != pair_labels)
+    mismatches = np.flatnonzero(file_sim_labels != pair_labels)
     if len(mismatches):
         index = int(mismatches[0])
         raise ValueError(
-            "Contact order mismatch between pairs_labels.npy and the workbook "
+            "Contact order mismatch between pairs_labels.npy and the feature file "
             f"at feature {index}: {pair_labels[index]!r} versus "
-            f"{workbook_sim_labels[index]!r}."
+            f"{file_sim_labels[index]!r}."
         )
-    if crystal1 is None:
-        return workbook_sim_labels
-    return combine(crystal1, crystal2)
+
+    def shift(label):
+        residue_name, residue_number = label.rsplit(":", 1)
+        return f"{residue_name}:{int(residue_number) + offset}"
+
+    crystal_pairs = [
+        (shift(first), shift(second))
+        for first, second in contacts.simulation_pairs
+    ]
+    return combine(crystal_pairs)
 
 
 def resolve_model_path(requested: Path | None) -> Path:
@@ -525,7 +492,9 @@ def main():
     bounds_apo = np.load(_required(OUT_DIR / f"replica_boundaries_{LABEL_APO.lower()}.npy"))
     bounds_mava = np.load(_required(OUT_DIR / f"replica_boundaries_{LABEL_MAVA.lower()}.npy"))
     pair_labels = np.load(_required(OUT_DIR / "pairs_labels.npy"), allow_pickle=True).astype(str)
-    pair_labels_crystal = load_crystal_pair_labels(CONTACTS_XLSX, pair_labels)
+    pair_labels_crystal = load_crystal_pair_labels(
+        FEATURES_FILE, pair_labels, CRYSTAL_NUMBERING_OFFSET
+    )
 
     model_path = resolve_model_path(args.model)
     model, model_source_type = load_existing_model(model_path, data_apo.shape[1])

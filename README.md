@@ -18,13 +18,13 @@ DeepAllo/
 ├── environment.yml
 ├── run_pipeline.sh
 ├── descriptors/                  # contact descriptors used in the paper
-│   ├── Apo_vs_Mava_contacts.xlsx
-│   └── Apo_vs_Ome_contacts.xlsx
+│   ├── Apo_vs_Mava_features.dat
+│   └── Apo_vs_OM_features.dat
 ├── examples/                     # strided demo data only
 │   └── Trajs/
 │       ├── Apo/
 │       ├── Mava/
-│       └── Ome/
+│       └── OM/
 └── weights_files/
     ├── Model_Apo_vs_Mava/
     │   ├── deeplda_model.pt
@@ -56,7 +56,12 @@ conda activate deep-allo
 All settings that normally need to be changed are grouped in the
 `USER CONFIGURATION` block near the top of `scripts/config.py`. By default,
 the pipeline uses the bundled trajectories under `examples/Trajs/`. Set the
-state folders, labels, and `CONTACTS_XLSX` in this block to select a comparison.
+state folders, labels, `FEATURES_FILE`, and `CRYSTAL_NUMBERING_OFFSET` in this
+block to select a comparison.
+
+To generate new feature lists, first use GetContacts to calculate residue-level
+contact frequencies from each state. Then run `descriptors/preprocess_contacts.py`
+as described in `descriptors/README.md`.
 
 ## Workflow A: train a new model from scratch
 
@@ -111,11 +116,12 @@ python scripts/03_post_training_analysis.py \
   --model weights_files/Model_Apo_vs_Mava/deeplda_model.pt
 ```
 
-The contact definitions used for two archived DeepAllo runs are supplied as
-`descriptors/Apo_vs_Mava_contacts.xlsx` and
-`descriptors/Apo_vs_Ome_contacts.xlsx`.
-Set the state folders, labels, and `CONTACTS_XLSX` in the `USER CONFIGURATION`
-block of `scripts/config.py` to select which comparison to run.
+The ordered feature definitions used for the two archived DeepAllo runs are
+supplied as the plain-text files `descriptors/Apo_vs_Mava_features.dat` and
+`descriptors/Apo_vs_OM_features.dat`. Step 03 generates crystal-numbered labels
+by adding `CRYSTAL_NUMBERING_OFFSET` to each simulation residue number. Set the
+state folders, labels, `FEATURES_FILE`, and numbering offset in the
+`USER CONFIGURATION` block of `scripts/config.py` to select a comparison.
 
 ## Main outputs
 

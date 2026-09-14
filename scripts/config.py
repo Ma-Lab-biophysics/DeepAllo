@@ -27,9 +27,13 @@ STATE2_FOLDER = "Mava"
 STATE1_LABEL = "Apo"
 STATE2_LABEL = "Mava"
 
-CONTACTS_XLSX = os.path.join(
-    ROOT_DIR, "descriptors", "Apo_vs_Mava_contacts.xlsx"
+FEATURES_FILE = os.path.join(
+    ROOT_DIR, "descriptors", "Apo_vs_Mava_features.dat"
 )
+
+# Added to each simulation residue number when Step 03 writes the optional
+# crystal-numbered contact labels. Use 0 if both numbering schemes are equal.
+CRYSTAL_NUMBERING_OFFSET = 2
 
 STRIDE_TRAIN = 1
 
