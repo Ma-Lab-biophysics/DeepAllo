@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Build minimal DeepAllo feature files from GetContacts frequencies.
+"""Build one minimal DeepAllo feature file from two GetContacts frequencies.
 
 The inputs are residue-frequency TSV files written by
 ``get_contact_frequencies.py`` after hydrogen-bond and salt-bridge contacts
-have been calculated for every replica.  The outputs contain only the two
+have been calculated for every replica. The output contains only the two
 ordered simulation-numbered residue columns required by DeepAllo.
 
 For reproduction with archived model weights, use
-``--match-archived-order``. This verifies that each newly selected pair set is
+``--match-archived-order``. This verifies that the newly selected pair set is
 identical to the corresponding archived DAT feature list and writes it in the
-archived feature order. If the archived list is unavailable, the script warns
-and writes the normal deterministic order instead.
+archived feature order. By default, the reference is the file with the same
+name under ``descriptors/``; use ``--reference-features`` to specify another
+reference. If the reference is unavailable, the script warns and writes the
+normal deterministic order instead.
 """
 
 from __future__ import annotations
@@ -33,6 +35,10 @@ EXCLUDE_RANGES = (
 MIN_SEQUENCE_SEPARATION = 5
 MIN_STATE_FREQUENCY = 0.10
 MIN_FREQUENCY_DIFFERENCE = 0.10
+ARCHIVED_FEATURE_NAMES = {
+    "Apo_vs_Mava_features.dat",
+    "Apo_vs_OM_features.dat",
+}
 
 
 @dataclass(frozen=True)
@@ -237,18 +243,32 @@ def write_feature_dat(path: Path, features: list[Feature]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    script_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apo-frequency", type=Path, required=True)
-    parser.add_argument("--mava-frequency", type=Path, required=True)
-    parser.add_argument("--om-frequency", type=Path, required=True)
     parser.add_argument(
-        "--output-dir",
+        "--state1-frequency",
         type=Path,
-        default=script_dir / "generated_features",
+        required=True,
+        help="Residue-frequency TSV for the first state.",
+    )
+    parser.add_argument(
+        "--state2-frequency",
+        type=Path,
+        required=True,
+        help="Residue-frequency TSV for the second state.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Output two-column DAT feature file.",
+    )
+    parser.add_argument(
+        "--reference-features",
+        type=Path,
+        default=None,
         help=(
-            "Directory for generated DAT files (default: "
-            "descriptors/generated_features)."
+            "Archived DAT file used with --match-archived-order. Defaults to "
+            "the file with the output filename under descriptors/."
         ),
     )
     parser.add_argument(
@@ -272,47 +292,44 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     script_dir = Path(__file__).resolve().parent
-    apo = load_frequency_tsv(args.apo_frequency, args.motor_chain)
-    mava = load_frequency_tsv(args.mava_frequency, args.motor_chain)
-    om = load_frequency_tsv(args.om_frequency, args.motor_chain)
+    frequencies1 = load_frequency_tsv(args.state1_frequency, args.motor_chain)
+    frequencies2 = load_frequency_tsv(args.state2_frequency, args.motor_chain)
+    features = select_features(frequencies1, frequencies2)
+    output_path = args.output
+    reference = (
+        args.reference_features
+        if args.reference_features is not None
+        else script_dir / output_path.name
+    )
 
-    comparisons = [
-        (
-            "Apo_vs_Mava_features.dat",
-            select_features(apo, mava),
-            script_dir / "Apo_vs_Mava_features.dat",
-        ),
-        (
-            "Apo_vs_OM_features.dat",
-            select_features(apo, om),
-            script_dir / "Apo_vs_OM_features.dat",
-        ),
-    ]
+    protected_paths = {
+        (script_dir / filename).resolve()
+        for filename in ARCHIVED_FEATURE_NAMES
+    }
+    if args.reference_features is not None:
+        protected_paths.add(reference.resolve())
+    if output_path.resolve() in protected_paths:
+        raise ValueError(
+            f"Refusing to overwrite archived feature file: {output_path}. "
+            "Write to a separate path, such as generated_features/<name>.dat."
+        )
 
-    for filename, features, reference in comparisons:
-        if args.match_archived_order:
-            if reference.is_file():
-                features = match_archived_order(features, reference)
-                verification = f"; pair set and order matched {reference.name}"
-            else:
-                print(
-                    f"WARNING: archived feature list not found: {reference}. "
-                    f"Writing {filename} in deterministic frequency-based "
-                    "order; do not use it with archived model weights."
-                )
-                verification = (
-                    "; archived order unavailable; deterministic order used"
-                )
+    if args.match_archived_order:
+        if reference.is_file():
+            features = match_archived_order(features, reference)
+            verification = f"; pair set and order matched {reference}"
         else:
-            verification = ""
-        output_path = args.output_dir / filename
-        if output_path.resolve() == reference.resolve():
-            raise ValueError(
-                f"Refusing to overwrite archived feature file: {reference}. "
-                "Choose a different --output-dir, such as generated_features."
+            print(
+                f"WARNING: archived feature list not found: {reference}. "
+                f"Writing {output_path} in deterministic frequency-based "
+                "order; do not use it with archived model weights."
             )
-        write_feature_dat(output_path, features)
-        print(f"Wrote {len(features)} features to {output_path}{verification}")
+            verification = "; archived order unavailable; deterministic order used"
+    else:
+        verification = ""
+
+    write_feature_dat(output_path, features)
+    print(f"Wrote {len(features)} features to {output_path}{verification}")
 
 
 if __name__ == "__main__":

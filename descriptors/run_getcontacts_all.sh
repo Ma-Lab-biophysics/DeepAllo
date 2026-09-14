@@ -34,15 +34,12 @@ case "$STAGE" in
 esac
 shift || true
 
-# Remaining arguments, if any, restrict the run to those states.
+# Remaining arguments, if any, select state-directory names. The three bundled
+# study states above are only the default; custom names are accepted.
 if [[ $# -gt 0 ]]; then
     for requested in "$@"; do
-        found=0
-        for known in "${STATES[@]}"; do
-            [[ "$requested" == "$known" ]] && found=1 && break
-        done
-        if [[ $found -eq 0 ]]; then
-            echo "ERROR: unknown state '${requested}'. Known states: ${STATES[*]}"
+        if [[ ! "$requested" =~ ^[A-Za-z0-9_.-]+$ || "$requested" == "." || "$requested" == ".." ]]; then
+            echo "ERROR: invalid state-directory name '${requested}'."
             exit 1
         fi
     done
@@ -99,12 +96,20 @@ if [[ "$STAGE" == "all" || "$STAGE" == "contacts" ]]; then
     for state in "${STATES[@]}"; do
         topology="${TRAJS_DIR}/${state}/topology.pdb"
         if [[ ! -f "$topology" ]]; then
-            echo "SKIP  ${state}: no topology at ${topology}"
+            echo "ERROR ${state}: no topology at ${topology}"
+            FAILED+=("${state}/topology")
             continue
         fi
         mkdir -p "${OUT_DIR}/${state}"
-        for traj in "${TRAJS_DIR}/${state}"/*.xtc; do
-            [[ -e "$traj" ]] || { echo "SKIP  ${state}: no .xtc files"; break; }
+        shopt -s nullglob
+        trajectories=("${TRAJS_DIR}/${state}"/*.xtc)
+        shopt -u nullglob
+        if [[ ${#trajectories[@]} -eq 0 ]]; then
+            echo "ERROR ${state}: no .xtc files under ${TRAJS_DIR}/${state}"
+            FAILED+=("${state}/trajectories")
+            continue
+        fi
+        for traj in "${trajectories[@]}"; do
             replica="$(basename "$traj" .xtc)"
             out="${OUT_DIR}/${state}/${replica}_HB_SB.tsv"
 
@@ -137,18 +142,18 @@ fi
 if [[ "$STAGE" == "all" || "$STAGE" == "freq" ]]; then
     for state in "${STATES[@]}"; do
         shopt -s nullglob
-        candidates=("${OUT_DIR}/${state}"/*_HB_SB.tsv)
-        shopt -u nullglob
         inputs=()
-        for c in "${candidates[@]}"; do
+        for c in "${OUT_DIR}/${state}"/*_HB_SB.tsv; do
             if is_complete "$c"; then
                 inputs+=("$c")
             else
                 echo "WARN  excluding incomplete ${c}"
             fi
         done
+        shopt -u nullglob
         if [[ ${#inputs[@]} -eq 0 ]]; then
-            echo "SKIP  ${state} frequencies: no contact files"
+            echo "ERROR ${state} frequencies: no complete contact files"
+            FAILED+=("${state}/frequencies")
             continue
         fi
         echo "FREQ  ${state} (${#inputs[@]} replicas)"

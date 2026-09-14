@@ -139,6 +139,9 @@ of `scripts/04_apply_cv.py` before running Step 04.
 frame; 50 frames). It exists so the pipeline can be exercised end
 to end in seconds, and it is not sufficient to reproduce the published results.
 
-To reproduce the paper, obtain the full trajectories and replace both the
-demonstration `.xtc` files and `topology.pdb` in each
-`examples/Trajs/<state>/` directory with the corresponding full-system files.
+Full trajectories are not distributed through GitHub. To reproduce the paper,
+obtain them from the external archive and create `./Trajs/<state>/` locally.
+Place the full trajectories and corresponding `topology.pdb` files in each
+state directory, then change `TRAJS_DIR` in `scripts/config.py` from
+`examples/Trajs` to `Trajs`. The bundled demonstration files under
+`examples/Trajs/` should remain unchanged.

@@ -1,11 +1,7 @@
 # Preparing contact features for DeepAllo
 
-`preprocess_contacts.py` converts residue-level contact-frequency files from
-GetContacts into the minimal plain-text feature files required by DeepAllo. It
-creates:
-
-- `Apo_vs_Mava_features.dat`
-- `Apo_vs_OM_features.dat`
+`preprocess_contacts.py` converts two residue-level contact-frequency files
+from GetContacts into one minimal plain-text feature file required by DeepAllo.
 
 Each non-comment line contains two whitespace-separated simulation-numbered
 residue labels, for example `GLU:773 LYS:144`. Each line is one ordered
@@ -32,13 +28,16 @@ git clone https://github.com/getcontacts/getcontacts.git getcontacts
 Run GetContacts and `preprocess_contacts.py` in the `getcontacts` environment,
 then activate `deep-allo` before running the main DeepAllo pipeline.
 
-Before running it, place each state-specific topology and its trajectories
-under `../Trajs/Apo/`, `../Trajs/Mava/`, and `../Trajs/OM/`. Each directory
-must contain `topology.pdb` and one or more `.xtc` files.
+Full trajectories are not distributed through GitHub. After cloning the
+repository, obtain them from the external archive and place each state-specific
+topology and its trajectories under `../Trajs/<state>/`. Each requested state
+directory must contain `topology.pdb` and one or more `.xtc` files. The local
+`Trajs/` directory should not be committed.
 
 ```bash
 bash run_getcontacts_all.sh                 # all states
-bash run_getcontacts_all.sh all Apo Mava      # selected states
+bash run_getcontacts_all.sh all Apo Mava    # selected states
+bash run_getcontacts_all.sh all state_A state_B  # custom state directories
 ```
 
 The run is resumable. A completed output is skipped, and one left truncated by
@@ -48,26 +47,33 @@ from the frequency step.
 
 ## 2. Build the DeepAllo feature files
 
-From the `descriptors` directory, run:
+From the `descriptors` directory, select any two state-frequency files and run:
 
 ```bash
-mkdir -p generated_features
-
 python preprocess_contacts.py \
-  --apo-frequency getcontacts_output/Apo_HB_SB_freq.tsv \
-  --mava-frequency getcontacts_output/Mava_HB_SB_freq.tsv \
-  --om-frequency getcontacts_output/OM_HB_SB_freq.tsv \
-  --output-dir generated_features \
+  --state1-frequency state_A_freq.tsv \
+  --state2-frequency state_B_freq.tsv \
+  --output generated_features/state_A_vs_state_B_features.dat
+```
+
+To regenerate and verify the archived Apo–Mava ordering, run:
+
+```bash
+python preprocess_contacts.py \
+  --state1-frequency getcontacts_output/Apo_HB_SB_freq.tsv \
+  --state2-frequency getcontacts_output/Mava_HB_SB_freq.tsv \
+  --output generated_features/Apo_vs_Mava_features.dat \
   --match-archived-order
 ```
 
-If `--output-dir` is omitted, the script writes to `generated_features/` by
-default. It also refuses to write directly over either supplied archived
-feature list. Set `FEATURES_FILE` to the generated file that you want to use.
+The output path is required, and the script refuses to write directly over
+either supplied archived feature list. Set `FEATURES_FILE` to the generated
+file that you want to use.
 
 The `--match-archived-order` option verifies the selected pair sets and restores
 their archived ordering when the archived feature lists are available. If a
 reference DAT file is absent, the script instead warns and writes the normal
 deterministic frequency-based order; that output is suitable for training a new
-model but not for applying archived weights. Omit `--match-archived-order` to
-generate the deterministic order without trying to match an archived list.
+model but not for applying archived weights. By default, the reference is the
+file with the same filename in `descriptors/`; use `--reference-features` to
+specify a different reference. Omit `--match-archived-order` for a new model.

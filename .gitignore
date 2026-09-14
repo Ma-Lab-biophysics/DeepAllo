@@ -2,6 +2,11 @@
 output/
 figures/
 models/
+/Trajs/
+descriptors/generated_features/
+descriptors/getcontacts/
+descriptors/getcontacts_output/
+output_ori/
 
 # Full trajectories are archived on Zenodo, not in git. Only the strided
 # single-replica demo set under examples/Trajs/ is tracked.
