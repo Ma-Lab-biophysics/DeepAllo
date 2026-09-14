@@ -61,9 +61,9 @@ python preprocess_contacts.py \
   --match-archived-order
 ```
 
-Using a separate output directory prevents a new analysis from overwriting the
-supplied archived feature lists. Set `FEATURES_FILE` to the generated file that
-you want to use.
+If `--output-dir` is omitted, the script writes to `generated_features/` by
+default. It also refuses to write directly over either supplied archived
+feature list. Set `FEATURES_FILE` to the generated file that you want to use.
 
 The `--match-archived-order` option verifies the selected pair sets and restores
 their archived ordering when the archived feature lists are available. If a

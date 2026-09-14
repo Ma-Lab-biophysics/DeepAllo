@@ -242,7 +242,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--apo-frequency", type=Path, required=True)
     parser.add_argument("--mava-frequency", type=Path, required=True)
     parser.add_argument("--om-frequency", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, default=script_dir)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=script_dir / "generated_features",
+        help=(
+            "Directory for generated DAT files (default: "
+            "descriptors/generated_features)."
+        ),
+    )
     parser.add_argument(
         "--motor-chain",
         help=(
@@ -298,6 +306,11 @@ def main() -> None:
         else:
             verification = ""
         output_path = args.output_dir / filename
+        if output_path.resolve() == reference.resolve():
+            raise ValueError(
+                f"Refusing to overwrite archived feature file: {reference}. "
+                "Choose a different --output-dir, such as generated_features."
+            )
         write_feature_dat(output_path, features)
         print(f"Wrote {len(features)} features to {output_path}{verification}")
 
