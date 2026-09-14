@@ -22,6 +22,7 @@ FES/convergence/sensitivity plots.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -50,6 +51,10 @@ from contact_features import load_contact_features  # noqa: E402
 OUT_DIR = Path(OUT_DIR)
 MODELS_DIR = Path(MODELS_DIR)
 FIGURES_DIR = Path(FIGURES_DIR)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ARCHIVED_MODEL_MANIFEST = (
+    PROJECT_ROOT / "weights_files" / "archived_model_manifest.json"
+)
 for directory in (OUT_DIR, MODELS_DIR, FIGURES_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -84,6 +89,151 @@ def _required(path: Path) -> Path:
     if not path.exists():
         raise FileNotFoundError(f"Required file not found: {path}")
     return path
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest of a file without loading it all into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _feature_order_sha256(pairs: list[tuple[str, str]]) -> str:
+    """Hash ordered pairs independently of DAT spacing, comments, or headers."""
+    payload = "".join(
+        f"{first}\t{second}\n"
+        for first, second in pairs
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _format_feature_pairs(pairs: list[tuple[str, str]]) -> str:
+    """Format contact pairs compactly for a validation error."""
+    return ", ".join(f"{first}-{second}" for first, second in pairs)
+
+
+def validate_archived_model_feature_order(
+    model_path: Path,
+    feature_path: Path,
+) -> dict:
+    """Enforce the exact DAT order associated with recognized archived models."""
+    manifest_path = _required(ARCHIVED_MODEL_MANIFEST)
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if manifest.get("schema_version") != 2:
+        raise ValueError(
+            f"Unsupported archived-model manifest schema in {manifest_path}."
+        )
+
+    model_digest = _sha256_file(model_path)
+    entry = manifest.get("models", {}).get(model_digest)
+    archived_root = (PROJECT_ROOT / "weights_files").resolve()
+    try:
+        model_path.resolve().relative_to(archived_root)
+        model_is_under_archived_root = True
+    except ValueError:
+        model_is_under_archived_root = False
+
+    if entry is None:
+        if model_is_under_archived_root:
+            raise ValueError(
+                f"Model under weights_files/ is not recognized by "
+                f"{manifest_path.name}. Its SHA-256 is {model_digest}. The file "
+                "may have been modified or may be missing from the manifest."
+            )
+        return {
+            "status": "not_applicable",
+            "model_sha256": model_digest,
+        }
+
+    contacts = load_contact_features(_required(feature_path))
+    actual_pairs = contacts.simulation_pairs
+    feature_digest = _feature_order_sha256(actual_pairs)
+    n_features = len(actual_pairs)
+    expected_digest = entry["feature_order_sha256"]
+    expected_count = int(entry["n_features"])
+
+    definition = manifest.get("feature_definitions", {}).get(entry["comparison"])
+    if definition is None:
+        raise ValueError(
+            f"Archived feature definition {entry['comparison']!r} is missing "
+            f"from {manifest_path}."
+        )
+    expected_pairs = [tuple(pair) for pair in definition.get("pairs", [])]
+    if (
+        len(expected_pairs) != expected_count
+        or _feature_order_sha256(expected_pairs) != expected_digest
+    ):
+        raise ValueError(
+            f"Archived feature definition {entry['comparison']!r} in "
+            f"{manifest_path} is internally inconsistent. Restore the "
+            "published manifest before running the analysis."
+        )
+
+    if n_features != expected_count or feature_digest != expected_digest:
+        expected_set = set(expected_pairs)
+        actual_set = set(actual_pairs)
+        detail_lines = []
+        if expected_set == actual_set:
+            first_mismatch = next(
+                index
+                for index, (expected, actual) in enumerate(
+                    zip(expected_pairs, actual_pairs), start=1
+                )
+                if expected != actual
+            )
+            expected_pair = expected_pairs[first_mismatch - 1]
+            actual_pair = actual_pairs[first_mismatch - 1]
+            detail_lines.extend([
+                f"The configured DAT contains the same {expected_count} contact "
+                "pairs, but they are in a different order.",
+                f"First mismatch at feature {first_mismatch}: expected "
+                f"{expected_pair[0]}-{expected_pair[1]}, found "
+                f"{actual_pair[0]}-{actual_pair[1]}.",
+            ])
+        else:
+            missing = sorted(expected_set - actual_set)
+            unexpected = sorted(actual_set - expected_set)
+            detail_lines.append(
+                "The configured DAT does not contain the expected contact-pair set."
+            )
+            if missing:
+                detail_lines.append(
+                    f"Missing expected pairs ({len(missing)}): "
+                    f"{_format_feature_pairs(missing)}"
+                )
+            if unexpected:
+                detail_lines.append(
+                    f"Unexpected pairs ({len(unexpected)}): "
+                    f"{_format_feature_pairs(unexpected)}"
+                )
+        raise ValueError(
+            "Archived-model feature definition mismatch.\n"
+            + "\n".join(detail_lines)
+            + "\n"
+            f"Model: {model_path}\n"
+            f"Expected feature definition: {entry['features_file']} "
+            f"({expected_count} features)\n"
+            f"Configured feature file: {feature_path} ({n_features} features)\n"
+            f"Expected feature-order SHA-256: {expected_digest}\n"
+            f"Observed feature-order SHA-256: {feature_digest}\n"
+            "Use the supplied DAT file or regenerate it with "
+            "--match-archived-order."
+        )
+
+    print(
+        "Archived feature-order check passed: "
+        f"{entry['comparison']} ({n_features} features)."
+    )
+    return {
+        "status": "passed",
+        "comparison": entry["comparison"],
+        "model_sha256": model_digest,
+        "feature_order_sha256": feature_digest,
+        "n_features": n_features,
+    }
 
 
 def load_crystal_pair_labels(feature_path: Path, pair_labels, offset: int):
@@ -497,6 +647,9 @@ def main():
     )
 
     model_path = resolve_model_path(args.model)
+    archived_feature_order_check = validate_archived_model_feature_order(
+        model_path, Path(FEATURES_FILE)
+    )
     model, model_source_type = load_existing_model(model_path, data_apo.shape[1])
     print(f"Model loaded without training ({model_source_type}): {model_path}")
 
@@ -544,6 +697,7 @@ def main():
             "model": str(model_path),
             "model_source_type": model_source_type,
             "model_retrained": False,
+            "archived_feature_order_check": archived_feature_order_check,
             "split_strategy": strategy,
             "seed": int(SEED),
             "train_fraction": float(TRAIN_FRAC),

@@ -123,6 +123,13 @@ by adding `CRYSTAL_NUMBERING_OFFSET` to each simulation residue number. Set the
 state folders, labels, `FEATURES_FILE`, and numbering offset in the
 `USER CONFIGURATION` block of `scripts/config.py` to select a comparison.
 
+Archived weights require the corresponding supplied DAT feature order. If a
+feature list is regenerated from GetContacts frequencies, use
+`--match-archived-order` as documented in `descriptors/README.md`. Step 03
+checks this requirement automatically for the supplied archived state
+dictionaries and full models using `weights_files/archived_model_manifest.json`
+and stops before analysis if the configured DAT order is incompatible.
+
 ## Main outputs
 
 Step 01 writes descriptor arrays, replica boundaries, and contact labels to
