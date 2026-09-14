@@ -1,7 +1,6 @@
 # DeepAllo: probing protein allostery with molecular dynamics and deep learning
 
-This tool extracts residue center-of-mass distance descriptors from
-MD trajectories and trains a deep learning model. 
+This tool extracts descriptors from MD trajectories and trains a deep learning model. 
 The example tests a small-molecule modulator (Mava) effect on the myosin motor domain. 
 Apo is state 1 and Mava is state 2.
 
@@ -146,9 +145,7 @@ of `scripts/04_apply_cv.py` before running Step 04.
 frame; 50 frames). It exists so the pipeline can be exercised end
 to end in seconds, and it is not sufficient to reproduce the published results.
 
-Full trajectories are not distributed through GitHub. To reproduce the paper,
-obtain them from the external archive and create `./Trajs/<state>/` locally.
+To reproduce the paper, obtain the full trajectories from the external archive and create `./Trajs/<state>/` locally.
 Place the full trajectories and corresponding `topology.pdb` files in each
 state directory, then change `TRAJS_DIR` in `scripts/config.py` from
-`examples/Trajs` to `Trajs`. The bundled demonstration files under
-`examples/Trajs/` should remain unchanged.
+`examples/Trajs` to `Trajs`.
